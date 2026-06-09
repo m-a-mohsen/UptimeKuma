@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Monitor Deep Analysis — kultserver.de</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap');
+:root{
+  --bg:#0c0e14;--s1:#13161f;--s2:#1a1e2b;--border:#242838;
+  --up:#1dd4a0;--dn:#f04060;--warn:#f5a623;--blue:#4e9eff;--purple:#a78bfa;
+  --txt:#dde3f5;--muted:#7882a4;
+  --mono:'IBM Plex Mono',monospace;--sans:'Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);font-size:13px;line-height:1.6}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 18px 60px}
+/* Header */
+header{margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border)}
+.ey{font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px}
+h1{font-size:24px;font-weight:600;letter-spacing:-.02em;margin-bottom:4px}
+.hmeta{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px}
+.hmeta span{margin-right:18px}
+/* Tabs */
+.tabs{display:flex;gap:2px;margin-bottom:24px;border-bottom:1px solid var(--border)}
+.tab{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:7px 16px;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .12s}
+.tab:hover{color:var(--txt)}
+.tab.active{color:var(--txt);border-bottom-color:currentColor}
+.tab.tb.active{color:var(--blue)}
+.tab.tc.active{color:var(--purple)}
+.panel{display:none}.panel.active{display:block}
+/* Grids */
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:24px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px}
+.g2w{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:24px}
+/* Cards */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:7px;padding:15px 17px}
+.card-lbl{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:5px}
+.card-val{font-family:var(--mono);font-size:21px;font-weight:600;line-height:1}
+.card-sub{font-size:10px;color:var(--muted);margin-top:4px}
+/* Record cards */
+.rec-card{background:var(--s1);border:1px solid var(--border);border-radius:7px;padding:14px 16px}
+.rec-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.rec-row:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none}
+.rec-label{font-size:11px;color:var(--muted)}
+.rec-val{font-family:var(--mono);font-size:12px;font-weight:600}
+/* Section */
+.sec{margin-bottom:28px}
+.sec-title{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+/* Chart box */
+.cbox{background:var(--s1);border:1px solid var(--border);border-radius:7px;padding:14px;height:200px;position:relative}
+.cbox canvas{max-height:170px}
+.cbox-title{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px}
+/* Error table */
+.etab{width:100%;border-collapse:collapse}
+.etab th{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border)}
+.etab td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:top}
+.etab tr:last-child td{border-bottom:none}
+.etab tr:hover td{background:rgba(255,255,255,.02)}
+.etype{font-family:var(--mono);font-size:11px;font-weight:600}
+.eex{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.4}
+/* Incident log */
+.ilog{display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto;padding-right:4px}
+.ilog::-webkit-scrollbar{width:4px}.ilog::-webkit-scrollbar-track{background:var(--border)}.ilog::-webkit-scrollbar-thumb{background:var(--muted);border-radius:2px}
+.irow{background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--dn);border-radius:5px;padding:9px 12px;display:flex;gap:12px;align-items:flex-start}
+.irow.warn{border-left-color:var(--warn)}
+.irow.ok{border-left-color:var(--up)}
+.itime{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;min-width:120px;margin-top:1px}
+.imain{flex:1}
+.ititle{font-size:11px;font-weight:600;margin-bottom:2px}
+.idetail{font-family:var(--mono);font-size:10px;color:var(--muted)}
+.idur{font-family:var(--mono);font-size:10px;padding:2px 7px;background:rgba(240,64,96,.12);color:var(--dn);border-radius:3px;white-space:nowrap}
+.idur.warn{background:rgba(245,166,35,.12);color:var(--warn)}
+/* Heatmap */
+.hmap{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.hcell{width:20px;height:20px;border-radius:3px;cursor:pointer;position:relative}
+.hcell:hover::after{content:attr(data-tip);position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:#222840;border:1px solid var(--border);padding:3px 8px;border-radius:4px;font-family:var(--mono);font-size:10px;white-space:nowrap;z-index:10;pointer-events:none}
+/* Bar stat */
+.brow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.blab{font-size:11px;color:var(--muted);min-width:80px}
+.bbar{flex:1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.bfill{height:100%;border-radius:3px}
+.bval{font-family:var(--mono);font-size:11px;min-width:46px;text-align:right}
+/* Colors */
+.up{color:var(--up)}.dn{color:var(--dn)}.warn{color:var(--warn)}.mu{color:var(--muted)}.bl{color:var(--blue)}.pu{color:var(--purple)}
+/* Work-hours note */
+.wnote{background:var(--s1);border:1px solid var(--border);border-left:3px solid var(--warn);border-radius:6px;padding:10px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:22px}
+.wnote strong{color:var(--warn)}
+/* Legend row */
+.legend{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.ld{width:10px;height:10px;border-radius:2px}
+@media(max-width:700px){.g4,.g3{grid-template-columns:repeat(2,1fr)}.g2,.g2w{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="ey">Uptime Kuma · Deep Analysis · kultserver.de</div>
+  <h1>Monitor Report — Enhanced</h1>
+  <div class="hmeta">
+    <span>Zeitraum: 22.04.2026 → 09.06.2026</span>
+    <span>Monitors: berlin (ID 7,8) · camelot (ID 9,10)</span>
+    <span>Stand: 09.06.2026</span>
+  </div>
+</header>
+
+<div class="wnote"><strong>Arbeitszeiten (CET):</strong> Mo Di Mi Fr 10–16 · Do 10–13 &amp; 15–18 — Uptime-Aufteilung anteilig aus Tagesdaten berechnet.</div>
+
+<div class="tabs">
+  <div class="tab tb active" onclick="sw('berlin')">🔵 berlin.kultserver.de</div>
+  <div class="tab tc" onclick="sw('camelot')">🟣 camelot.kultserver.de</div>
+</div>
+
+<!-- ═══════════════════ BERLIN ═══════════════════ -->
+<div class="panel active" id="p-berlin">
+
+  <div class="sec">
+    <div class="sec-title">Fleet Overview</div>
+    <div class="g4">
+      <div class="card"><div class="card-lbl">Browser Uptime</div><div class="card-val warn">97.3%</div><div class="card-sub">532 Ausfälle / 19,578 Checks</div></div>
+      <div class="card"><div class="card-lbl">Ping Uptime</div><div class="card-val up">99.93%</div><div class="card-sub">8 Ausfälle / 11,951 Checks</div></div>
+      <div class="card"><div class="card-lbl">Ø Browser RT</div><div class="card-val bl">29 ms</div><div class="card-sub">Max Spike: 9,369 ms</div></div>
+      <div class="card"><div class="card-lbl">Ø Ping RT</div><div class="card-val up">1.3 ms</div><div class="card-sub">Min 0.4 · Max ~50 ms</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Arbeitszeit vs. Außerhalb</div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-lbl" style="margin-bottom:12px">Browser Monitor</div>
+        <div class="brow"><div class="blab">Gesamt</div><div class="bbar"><div class="bfill" style="width:97.3%;background:var(--warn)"></div></div><div class="bval warn">97.3%</div></div>
+        <div class="brow"><div class="blab">Arbeitszeit</div><div class="bbar"><div class="bfill" style="width:97.9%;background:var(--warn)"></div></div><div class="bval warn">97.9%</div></div>
+        <div class="brow"><div class="blab">Außerhalb</div><div class="bbar"><div class="bfill" style="width:97.1%;background:var(--warn)"></div></div><div class="bval warn">97.1%</div></div>
+      </div>
+      <div class="card">
+        <div class="card-lbl" style="margin-bottom:12px">Ping Monitor</div>
+        <div class="brow"><div class="blab">Gesamt</div><div class="bbar"><div class="bfill" style="width:99.93%;background:var(--up)"></div></div><div class="bval up">99.93%</div></div>
+        <div class="brow"><div class="blab">Arbeitszeit</div><div class="bbar"><div class="bfill" style="width:99.91%;background:var(--up)"></div></div><div class="bval up">99.91%</div></div>
+        <div class="brow"><div class="blab">Außerhalb</div><div class="bbar"><div class="bfill" style="width:99.94%;background:var(--up)"></div></div><div class="bval up">99.94%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Rekorde &amp; Extremwerte</div>
+    <div class="g3">
+      <div class="rec-card">
+        <div class="card-lbl" style="margin-bottom:10px">🔴 Schlechtester Tag</div>
+        <div class="rec-row"><div class="rec-label">Datum</div><div class="rec-val dn">16.05.2026</div></div>
+        <div class="rec-row"><div class="rec-label">Browser Uptime</div><div class="rec-val dn">91.0%</div></div>
+        <div class="rec-row"><div class="rec-label">Down-Checks</div><div class="rec-val dn">129</div></div>
+        <div class="rec-row"><div class="rec-label">Wochentag</div><div class="rec-val mu">Samstag</div></div>
+      </div>
+      <div class="rec-card">
+        <div class="card-lbl" style="margin-bottom:10px">📅 Schlechteste Woche</div>
+        <div class="rec-row"><div class="rec-label">KW</div><div class="rec-val warn">W21 2026 (18–24 Mai)</div></div>
+        <div class="rec-row"><div class="rec-label">Browser Uptime</div><div class="rec-val warn">92.8%</div></div>
+        <div class="rec-row"><div class="rec-label">Total Down-Checks</div><div class="rec-val warn">344</div></div>
+        <div class="rec-row"><div class="rec-label">Ping Uptime</div><div class="rec-val up">99.8%</div></div>
+      </div>
+      <div class="rec-card">
+        <div class="card-lbl" style="margin-bottom:10px">⏱ Längster Ausfall</div>
+        <div class="rec-row"><div class="rec-label">Tag</div><div class="rec-val dn">27.04.2026</div></div>
+        <div class="rec-row"><div class="rec-label">Dauer (geschätzt)</div><div class="rec-val dn">~100 min kumulativ</div></div>
+        <div class="rec-row"><div class="rec-label">Art</div><div class="rec-val mu">Wiederholende Timeouts</div></div>
+        <div class="rec-row"><div class="rec-label">Arbeitszeit?</div><div class="rec-val warn">Ja (09–17 Uhr)</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Charts</div>
+    <div class="g2">
+      <div class="cbox"><div class="cbox-title">Browser — tägliche Uptime %</div><canvas id="c-b-daily"></canvas></div>
+      <div class="cbox"><div class="cbox-title">Browser — wöchentliche Uptime %</div><canvas id="c-b-weekly"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="cbox"><div class="cbox-title">Ping — tägliche Uptime &amp; Latenz</div><canvas id="c-bp-daily"></canvas></div>
+      <div class="cbox"><div class="cbox-title">Fehler nach Stunde (CET) — Browser</div><canvas id="c-b-hour"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="cbox"><div class="cbox-title">Down-Checks pro Tag — Browser</div><canvas id="c-b-down"></canvas></div>
+      <div class="cbox"><div class="cbox-title">Fehlertypen — Browser (work vs. off)</div><canvas id="c-b-etype"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Uptime-Heatmap — Browser (1 Kästchen = 1 Tag)</div>
+    <div class="legend">
+      <div class="li"><div class="ld" style="background:var(--up)"></div>100%</div>
+      <div class="li"><div class="ld" style="background:#b8e04a"></div>≥99%</div>
+      <div class="li"><div class="ld" style="background:var(--warn)"></div>≥95%</div>
+      <div class="li"><div class="ld" style="background:var(--dn)"></div>&lt;95%</div>
+      <div class="li"><div class="ld" style="background:var(--border)"></div>Keine Daten</div>
+    </div>
+    <div class="hmap" id="hm-b"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Fehlerdetails — Browser Monitor (ID 7)</div>
+    <table class="etab">
+      <thead><tr><th>Fehlertyp</th><th>Arbeitszeit</th><th>Außerhalb</th><th>Total</th><th>Root Cause &amp; Details</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="etype bl">Browser Timeout (48s)</div></td>
+          <td class="warn">12</td><td class="mu">11</td><td class="dn">23</td>
+          <td><div class="eex"><strong>page.goto: Timeout 48000ms exceeded</strong><br>Seite erreicht <code>networkidle</code> nicht innerhalb 48 Sek. Monitor-Timeout war ursprünglich auf 48s gesetzt. Ursache: Schwere JS-Ressourcen oder hängende Requests blockieren das networkidle-Event. Aufgetreten 22.04–27.04 vor dem Timeout-Downgrade auf 16s.</div></td>
+        </tr>
+        <tr>
+          <td><div class="etype warn">Browser Timeout (16s)</div></td>
+          <td class="warn">5</td><td class="mu">5</td><td class="warn">10</td>
+          <td><div class="eex"><strong>page.goto: Timeout 16000ms exceeded</strong><br>Nach dem Downgrade auf 16s-Timeout häufiger Auslöser. Seite braucht unter Last &gt;16s zum networkidle. 27.04–30.04 aktiv. Gut für frühe Erkennung, aber aggressiver Schwellenwert.</div></td>
+        </tr>
+        <tr>
+          <td><div class="etype dn">TCP Timeout (ETIMEDOUT)</div></td>
+          <td class="warn">1</td><td class="mu">0</td><td class="mu">1</td>
+          <td><div class="eex"><strong>connect ETIMEDOUT</strong><br>TCP-Verbindung zum Server schlug fehl — Netzwerkschicht-Problem, nicht App. Einmalig am 28.04 um 13:01, gleichzeitig mit camelot-Ausfall (gemeinsame Netzwerkkomponente).</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Fehlerdetails — Ping Monitor (ID 8)</div>
+    <table class="etab">
+      <thead><tr><th>Fehlertyp</th><th>Arbeitszeit</th><th>Außerhalb</th><th>Total</th><th>Details</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="etype dn">TCP Timeout (ETIMEDOUT)</div></td>
+          <td class="warn">2</td><td class="mu">0</td><td class="mu">2</td>
+          <td><div class="eex"><strong>connect ETIMEDOUT</strong><br>27.04 11:44 (~21 min) und 28.04 12:55 (~2 min). Beide während Arbeitszeit. Koinzidenz mit browser-Ausfällen — deutet auf kurze Netzwerkunterbrechungen hin.</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Incident-Log — Browser Monitor (chronologisch)</div>
+    <div class="ilog" id="ilog-berlin"></div>
+  </div>
+
+</div><!-- /berlin -->
+
+<!-- ═══════════════════ CAMELOT ═══════════════════ -->
+<div class="panel" id="p-camelot">
+
+  <div class="sec">
+    <div class="sec-title">Fleet Overview</div>
+    <div class="g4">
+      <div class="card"><div class="card-lbl">Browser Uptime</div><div class="card-val warn">97.6%</div><div class="card-sub">474 Ausfälle / 19,572 Checks</div></div>
+      <div class="card"><div class="card-lbl">Ping Uptime</div><div class="card-val up">99.96%</div><div class="card-sub">5 Ausfälle / 11,952 Checks</div></div>
+      <div class="card"><div class="card-lbl">Ø Browser RT</div><div class="card-val warn">144 ms</div><div class="card-sub">Max Spike: 8,817 ms</div></div>
+      <div class="card"><div class="card-lbl">Ø Ping RT</div><div class="card-val up">0.74 ms</div><div class="card-sub">Konstant sub-ms</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Arbeitszeit vs. Außerhalb</div>
+    <div class="g2">
+      <div class="card">
+        <div class="card-lbl" style="margin-bottom:12px">Browser Monitor</div>
+        <div class="brow"><div class="blab">Gesamt</div><div class="bbar"><div class="bfill" style="width:97.6%;background:var(--warn)"></div></div><div class="bval warn">97.6%</div></div>
+        <div class="brow"><div class="blab">Arbeitszeit</div><div class="bbar"><div class="bfill" style="width:98.2%;background:var(--warn)"></div></div><div class="bval warn">98.2%</div></div>
+        <div class="brow"><div class="blab">Außerhalb</div><div class="bbar"><div class="bfill" style="width:97.4%;background:var(--dn)"></div></div><div class="bval dn">97.4%</div></div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:10px">⚠ Ausfälle häufen sich außerhalb der Arbeitszeit — insbes. Nächte &amp; Wochenende.</div>
+      </div>
+      <div class="card">
+        <div class="card-lbl" style="margin-bottom:12px">Ping Monitor</div>
+        <div class="brow"><div class="blab">Gesamt</div><div class="bbar"><div class="bfill" style="width:99.96%;background:var(--up)"></div></div><div class="bval up">99.96%</div></div>
+        <div class="brow"><div class="blab">Arbeitszeit</div><div class="bbar"><div class="bfill" style="width:99.94%;background:var(--up)"></div></div><div class="bval up">99.94%</div></div>
+        <div class="brow"><div class="blab">Außerhalb</div><div class="bbar"><div class="bfill" style="width:99.96%;background:var(--up)"></div></div><div class="bval up">99.96%</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Rekorde &amp; Extremwerte</div>
+    <div class="g3">
+      <div class="rec-card">
+        <div class="card-lbl" style="margin-bottom:10px">🔴 Schlechtester Tag</div>
+        <div class="rec-row"><div class="rec-label">Datum</div><div class="rec-val dn">16.05.2026</div></div>
+        <div class="rec-row"><div class="rec-label">Browser Uptime</div><div class="rec-val dn">90.7%</div></div>
+        <div class="rec-row"><div class="rec-label">Down-Checks</div><div class="rec-val dn">133</div></div>
+        <div class="rec-row"><div class="rec-label">Wochentag</div><div class="rec-val mu">Samstag</div></div>
+      </div>
+      <div class="rec-card">
+        <div class="card-lbl" style="margin-bottom:10px">📅 Schlechteste Woche</div>
+        <div class="rec-row"><div class="rec-label">KW</div><div class="rec-val warn">W21 2026 (18–24 Mai)</div></div>
+        <div class="rec-row"><div class="rec-label">Browser Uptime</div><div class="rec-val warn">91.5%</div></div>
+        <div class="rec-row"><div class="rec-label">Total Down-Checks</div><div class="rec-val warn">443</div></div>
+        <div class="rec-row"><div class="rec-label">Ping Uptime</div><div class="rec-val up">99.6%</div></div>
+      </div>
+      <div class="rec-card">
+        <div class="card-lbl" style="margin-bottom:10px">⏱ Längster Ausfall</div>
+        <div class="rec-row"><div class="rec-label">Tag</div><div class="rec-val dn">16.05.2026</div></div>
+        <div class="rec-row"><div class="rec-label">Down-Checks</div><div class="rec-val dn">133 (~133 min)</div></div>
+        <div class="rec-row"><div class="rec-label">Art</div><div class="rec-val dn">Timeout + ETIMEDOUT</div></div>
+        <div class="rec-row"><div class="rec-label">Trend</div><div class="rec-val warn">Zunehmend seit 14.05</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Charts</div>
+    <div class="g2">
+      <div class="cbox"><div class="cbox-title">Browser — tägliche Uptime %</div><canvas id="c-c-daily"></canvas></div>
+      <div class="cbox"><div class="cbox-title">Browser — wöchentliche Uptime %</div><canvas id="c-c-weekly"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="cbox"><div class="cbox-title">Ping — tägliche Uptime &amp; Latenz</div><canvas id="c-cp-daily"></canvas></div>
+      <div class="cbox"><div class="cbox-title">Down-Checks pro Tag — Browser + Ping</div><canvas id="c-c-down"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="cbox"><div class="cbox-title">Browser Avg Response Time Trend (ms)</div><canvas id="c-c-rt"></canvas></div>
+      <div class="cbox"><div class="cbox-title">Fehlertypen — Browser &amp; Ping (work vs. off)</div><canvas id="c-c-etype"></canvas></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Uptime-Heatmap — Browser (1 Kästchen = 1 Tag)</div>
+    <div class="legend">
+      <div class="li"><div class="ld" style="background:var(--up)"></div>100%</div>
+      <div class="li"><div class="ld" style="background:#b8e04a"></div>≥99%</div>
+      <div class="li"><div class="ld" style="background:var(--warn)"></div>≥95%</div>
+      <div class="li"><div class="ld" style="background:var(--dn)"></div>&lt;95%</div>
+      <div class="li"><div class="ld" style="background:var(--border)"></div>Keine Daten</div>
+    </div>
+    <div class="hmap" id="hm-c"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Fehlerdetails — Browser Monitor (ID 10)</div>
+    <table class="etab">
+      <thead><tr><th>Fehlertyp</th><th>Arbeitszeit (est.)</th><th>Außerhalb (est.)</th><th>Total Checks</th><th>Root Cause &amp; Details</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="etype warn">Browser Timeout</div></td>
+          <td class="warn">~55%</td><td class="dn">~45%</td><td class="dn">~400</td>
+          <td><div class="eex"><strong>page.goto: Timeout exceeded</strong><br>Camelot-Login-Seite (<code>/login</code>) reagiert zu langsam. Login-Seiten laden oft schwerer (Auth-JS, Session-Init). Avg RT 144ms aber Spikes bis 8,817ms zeigen sporadische Komplettblockierung. Häufiger außerhalb Arbeitszeit → könnte Nacht-Job / Reindex / Backup-Prozess sein.</div></td>
+        </tr>
+        <tr>
+          <td><div class="etype dn">TCP Timeout (ETIMEDOUT)</div></td>
+          <td class="warn">~40%</td><td class="dn">~60%</td><td class="dn">~74</td>
+          <td><div class="eex"><strong>connect ETIMEDOUT</strong><br>Server antwortet nicht auf TCP-Verbindung. Deutlich mehr als bei berlin — Camelot hat echte Netzwerkausfälle, nicht nur App-Timeouts. Letzte 4 Tage (05.–09.06) stark eskalierend.</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Fehlerdetails — Ping Monitor (ID 9)</div>
+    <table class="etab">
+      <thead><tr><th>Fehlertyp</th><th>Arbeitszeit</th><th>Außerhalb</th><th>Total</th><th>Details</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div class="etype dn">TCP Timeout (ETIMEDOUT)</div></td>
+          <td class="warn">2</td><td class="mu">0</td><td class="mu">2</td>
+          <td><div class="eex"><strong>connect ETIMEDOUT</strong><br>28.04 zweimal innerhalb 10 min. Koinzidenz mit berlin-Ping-Ausfall → gemeinsame Infrastruktur betroffen.</div></td>
+        </tr>
+        <tr>
+          <td><div class="etype mu">Broken Pipe (EPIPE)</div></td>
+          <td class="mu">1</td><td class="mu">0</td><td class="mu">1</td>
+          <td><div class="eex"><strong>write EPIPE</strong><br>28.04 12:39 — Verbindung während Ping-Schreiben abgebrochen. Server hat Socket unerwartet geschlossen. Einmalig, keine Wiederholung.</div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Incident-Log — alle Monitore (chronologisch)</div>
+    <div class="ilog" id="ilog-camelot"></div>
+  </div>
+
+</div><!-- /camelot -->
+</div>
+
+<script>
+// ── Data ─────────────────────────────────────────────────────────────────────
+const DATES7 = ["2026-04-22","2026-04-23","2026-04-24","2026-04-25","2026-04-26","2026-04-27","2026-04-28","2026-04-29","2026-04-30","2026-05-01","2026-05-02","2026-05-03","2026-05-04","2026-05-05","2026-05-06","2026-05-07","2026-05-08","2026-05-09","2026-05-10","2026-05-11","2026-05-12","2026-05-13","2026-05-14","2026-05-15","2026-05-16","2026-05-17","2026-05-18"];
+const UP7   = [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,100,99.2,99.1,99.5,98.9,92.5,91.0,91.6,92.8];
+const DW7   = [0,7,0,17,5,103,32,80,12,0,0,0,123,49,0,1,15,0,1,24,26,15,28,126,129,112,71];
+const PING7 = [39.06,46.11,40.47,22.08,23.18,53.91,42.59,28.99,37.19,27.55,26.46,30.74,34.67,44.08,53.6,43.91,47.69,24.61,29.38,29.46,38.72,29.94,26.43,31.74,22.81,25.9,29.06];
+
+const DATES8 = DATES7;
+const UP8   = [100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,99.3,100,100,100,100,99.8,99.8,100,99.9,99.8];
+const DW8   = [0,0,0,0,0,1,2,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0,1,2,0,1,2];
+const PING8 = [0.78,0.74,0.73,1.07,1.57,1.36,1.5,1.4,1.69,1.69,1.53,1.4,1.3,0.81,0.77,0.94,0.91,0.98,1.4,1.36,1.11,1.23,1.49,1.37,1.59,1.23,null];
+
+const WK7 = [{w:"W17 2026",u:97.5,d:12},{w:"W18 2026",u:94.8,d:180},{w:"W19 2026",u:98.2,d:80},{w:"W20 2026",u:99.3,d:49},{w:"W21 2026",u:92.8,d:344}];
+
+const DATES9 = DATES7;
+const UP9   = [100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,99.5,100,100,100,100,99.9,100,100,100,99.6];
+const DW9   = [0,0,0,0,0,5,3,0,0,0,0,0,0,0,0,0,0,5,0,0,0,0,1,0,0,0,4];
+const PING9 = [1.72,1.72,1.6,1.33,0.72,0.67,0.73,0.71,0.87,0.72,0.73,0.65,0.66,0.69,0.74,0.87,0.69,0.72,0.67,0.7,0.64,0.7,0.98,0.7,0.74,0.74,0.73];
+
+const DATES10 = ["2026-04-27","2026-04-28","2026-04-29","2026-04-30","2026-05-01","2026-05-02","2026-05-03","2026-05-04","2026-05-05","2026-05-06","2026-05-07","2026-05-08","2026-05-09","2026-05-10","2026-05-11","2026-05-12","2026-05-13","2026-05-14","2026-05-15","2026-05-16","2026-05-17","2026-05-18"];
+const UP10  = [null,100,100,100,100,100,100,100,100,100,100,100,100,100,100,100,99.9,98.9,92.2,90.7,92.8,91.5];
+const DW10  = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,29,131,133,95,84];
+const RT10  = [null,109,113,128,106,102,106,121,124,150,126,130,111,122,121,120,117,112,183,144,176,196];
+const WK10  = [{w:"W18 2026",u:100,d:0},{w:"W19 2026",u:100,d:0},{w:"W20 2026",u:99.9,d:2},{w:"W21 2026",u:91.5,d:443}];
+
+// Hour distribution (monitor 7, from heartbeat sample)
+const HOUR7 = [0,0,0,0,0,0,0,1,0,4,6,5,4,3,3,1,2,1,0,1,0,0,0,0];
+
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+const CFG = {
+  responsive:true,
+  interaction:{mode:'index',intersect:false},
+  plugins:{legend:{display:false},tooltip:{backgroundColor:'#1a1e2b',borderColor:'#242838',borderWidth:1,titleColor:'#dde3f5',bodyColor:'#7882a4'}},
+  scales:{
+    x:{ticks:{color:'#7882a4',font:{family:'IBM Plex Mono',size:9},maxRotation:45},grid:{color:'#242838'}},
+    y:{ticks:{color:'#7882a4',font:{family:'IBM Plex Mono',size:9}},grid:{color:'#242838'}}
+  }
+};
+
+function sd(d){const p=new Date(d);return (p.getMonth()+1)+'/'+(p.getDate())}
+
+function lineChart(id, labels, datasets){
+  const ctx=document.getElementById(id);
+  if(!ctx)return;
+  new Chart(ctx,{type:'line',data:{labels,datasets},options:{...CFG,responsive:true,maintainAspectRatio:false}});
+}
+
+function barChart(id, labels, datasets){
+  const ctx=document.getElementById(id);
+  if(!ctx)return;
+  new Chart(ctx,{type:'bar',data:{labels,datasets},options:{...CFG,responsive:true,maintainAspectRatio:false}});
+}
+
+// ── BERLIN CHARTS ─────────────────────────────────────────────────────────────
+lineChart('c-b-daily', DATES7.map(sd), [{
+  label:'Uptime%',data:UP7,borderColor:'rgba(78,158,255,1)',backgroundColor:'rgba(78,158,255,0.07)',
+  yAxisID:'y',tension:.35,pointRadius:3,fill:true,spanGaps:true,borderWidth:2
+}]);
+
+barChart('c-b-weekly', WK7.map(x=>x.w), [{
+  label:'Uptime%',data:WK7.map(x=>x.u),
+  backgroundColor:WK7.map(x=>x.u<95?'rgba(240,64,96,0.7)':x.u<99?'rgba(245,166,35,0.7)':'rgba(29,212,160,0.6)'),
+  borderRadius:4,borderSkipped:false
+}]);
+
+lineChart('c-bp-daily', DATES8.map(sd), [
+  {label:'Uptime%',data:UP8,borderColor:'rgba(29,212,160,1)',backgroundColor:'rgba(29,212,160,0.07)',yAxisID:'y',tension:.3,pointRadius:2,fill:true,spanGaps:true,borderWidth:1.5},
+  {label:'Ping ms',data:PING8,borderColor:'rgba(130,140,180,0.5)',yAxisID:'y2',tension:.3,pointRadius:1,borderWidth:1,borderDash:[3,3],spanGaps:true}
+]);
+
+barChart('c-b-hour', Array.from({length:24},(_,i)=>i+'h'), [{
+  label:'Errors',data:HOUR7,
+  backgroundColor:Array.from({length:24},(_,i)=>{
+    const isWork=(i>=10&&i<16);
+    return isWork?'rgba(245,166,35,0.7)':'rgba(78,158,255,0.5)';
+  }),borderRadius:3,borderSkipped:false
+}]);
+
+barChart('c-b-down', DATES7.map(sd), [{
+  label:'Down-Checks',data:DW7,
+  backgroundColor:DW7.map(v=>v>50?'rgba(240,64,96,0.8)':v>10?'rgba(245,166,35,0.7)':'rgba(78,158,255,0.5)'),
+  borderRadius:3,borderSkipped:false
+}]);
+
+// Error type work vs off
+new Chart(document.getElementById('c-b-etype'),{type:'bar',data:{
+  labels:['Browser TO 48s','Browser TO 16s','TCP Timeout'],
+  datasets:[
+    {label:'Arbeitszeit',data:[12,5,1],backgroundColor:'rgba(245,166,35,0.7)',borderRadius:3,borderSkipped:false},
+    {label:'Außerhalb',data:[11,5,0],backgroundColor:'rgba(78,158,255,0.5)',borderRadius:3,borderSkipped:false}
+  ]
+},options:{...CFG,responsive:true,maintainAspectRatio:false,plugins:{...CFG.plugins,legend:{display:true,labels:{color:'#7882a4',font:{family:'IBM Plex Mono',size:9}}}}}});
+
+// ── CAMELOT CHARTS ────────────────────────────────────────────────────────────
+lineChart('c-c-daily', DATES10.map(sd), [{
+  label:'Uptime%',data:UP10,borderColor:'rgba(167,139,250,1)',backgroundColor:'rgba(167,139,250,0.07)',
+  yAxisID:'y',tension:.35,pointRadius:3,fill:true,spanGaps:true,borderWidth:2
+}]);
+
+barChart('c-c-weekly', WK10.map(x=>x.w), [{
+  label:'Uptime%',data:WK10.map(x=>x.u),
+  backgroundColor:WK10.map(x=>x.u<95?'rgba(240,64,96,0.7)':x.u<99?'rgba(245,166,35,0.7)':'rgba(29,212,160,0.6)'),
+  borderRadius:4,borderSkipped:false
+}]);
+
+lineChart('c-cp-daily', DATES9.map(sd), [
+  {label:'Uptime%',data:UP9,borderColor:'rgba(29,212,160,1)',backgroundColor:'rgba(29,212,160,0.07)',yAxisID:'y',tension:.3,pointRadius:2,fill:true,spanGaps:true,borderWidth:1.5},
+  {label:'Ping ms',data:PING9,borderColor:'rgba(130,140,180,0.5)',yAxisID:'y2',tension:.3,pointRadius:1,borderWidth:1,borderDash:[3,3],spanGaps:true}
+]);
+
+new Chart(document.getElementById('c-c-down'),{type:'bar',data:{
+  labels:DATES10.map(sd),
+  datasets:[
+    {label:'Browser Down',data:DW10,backgroundColor:DW10.map(v=>v>50?'rgba(240,64,96,0.8)':v>10?'rgba(245,166,35,0.7)':'rgba(167,139,250,0.5)'),borderRadius:3,borderSkipped:false},
+    {label:'Ping Down',data:DATES10.map((_,i)=>DW9[i+5]||0),backgroundColor:'rgba(78,158,255,0.4)',borderRadius:3,borderSkipped:false}
+  ]
+},options:{...CFG,responsive:true,maintainAspectRatio:false,plugins:{...CFG.plugins,legend:{display:true,labels:{color:'#7882a4',font:{family:'IBM Plex Mono',size:9}}}}}});
+
+lineChart('c-c-rt', DATES10.map(sd), [{
+  label:'Avg RT ms',data:RT10,borderColor:'rgba(245,166,35,1)',backgroundColor:'rgba(245,166,35,0.07)',
+  yAxisID:'y',tension:.35,pointRadius:3,fill:true,spanGaps:true,borderWidth:2
+}]);
+
+new Chart(document.getElementById('c-c-etype'),{type:'bar',data:{
+  labels:['Browser Timeout','TCP Timeout','EPIPE'],
+  datasets:[
+    {label:'Arbeitszeit',data:[55,40,1],backgroundColor:'rgba(245,166,35,0.7)',borderRadius:3,borderSkipped:false},
+    {label:'Außerhalb',data:[45,60,0],backgroundColor:'rgba(167,139,250,0.5)',borderRadius:3,borderSkipped:false}
+  ]
+},options:{...CFG,responsive:true,maintainAspectRatio:false,plugins:{...CFG.plugins,legend:{display:true,labels:{color:'#7882a4',font:{family:'IBM Plex Mono',size:9}}}}}});
+
+// ── Heatmaps ──────────────────────────────────────────────────────────────────
+function hmap(elId, dates, uptimes){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  dates.forEach((d,i)=>{
+    const v=uptimes[i];
+    const c=document.createElement('div');
+    c.className='hcell';
+    c.style.background=v==null?'var(--border)':v>=99.9?'var(--up)':v>=99?'#b8e04a':v>=95?'var(--warn)':'var(--dn)';
+    c.setAttribute('data-tip',`${d}: ${v!=null?v+'%':'N/A'}`);
+    el.appendChild(c);
+  });
+}
+hmap('hm-b',DATES7,UP7);
+hmap('hm-c',DATES10,UP10);
+
+// ── Incident logs ─────────────────────────────────────────────────────────────
+const BERLIN_INC=[
+  {t:"2026-04-23 09:53",dur:"~7 min",type:"Browser Timeout",detail:"page.goto Timeout 48s — networkidle nicht erreicht",sev:"dn"},
+  {t:"2026-04-25 08:27",dur:"1 min",type:"Browser Timeout",detail:"page.goto Timeout 48s",sev:"warn"},
+  {t:"2026-04-25 09:39",dur:"5 min",type:"Browser Timeout",detail:"page.goto Timeout 48s",sev:"warn"},
+  {t:"2026-04-25 20:37",dur:"11 min",type:"Browser Timeout",detail:"page.goto Timeout 48s — außerhalb Arbeitszeit",sev:"warn"},
+  {t:"2026-04-26 10:27",dur:"5 min",type:"Browser Timeout",detail:"page.goto Timeout 48s — Arbeitszeit",sev:"warn"},
+  {t:"2026-04-27 09:06",dur:"~5 min",type:"Browser Timeout",detail:"SCHLECHTER TAG — 18 Timeouts bis 17 Uhr, alle Arbeitszeit",sev:"dn"},
+  {t:"2026-04-27 11:43",dur:"22 min",type:"Browser + TCP",detail:"Timeout 48s + connect ETIMEDOUT — längster Einzelausfall",sev:"dn"},
+  {t:"2026-04-27 13:12–14:47",dur:"Mehrfach ~5 min",type:"Browser Timeout",detail:"Wiederholt während Arbeitszeit",sev:"dn"},
+  {t:"2026-04-28 09:10",dur:"6 min",type:"Browser Timeout 48s→16s",detail:"Timeout verkürzt auf 16s an diesem Tag",sev:"warn"},
+  {t:"2026-04-28 12:33–14:40",dur:"~100 min kumulativ",type:"Network + Timeout",detail:"ETIMEDOUT + 16s Timeouts — shared outage mit camelot",sev:"dn"},
+  {t:"2026-04-29 07:09–19:39",dur:"3× ~5 min",type:"Browser Timeout 16s",detail:"Früh, Mittag, Abend — unregelmäßig",sev:"warn"},
+  {t:"2026-04-30 09:08",dur:"1 min",type:"Browser Timeout 16s",detail:"Einmalig, schnell erholt",sev:"warn"},
+  {t:"2026-05-15 bis 18",dur:"Täglich 90–130 checks",type:"Systematisch",detail:"W21-Ausfall: Browser dauerhaft unter 93% über 4 Tage",sev:"dn"},
+];
+
+const CAMELOT_INC=[
+  {t:"2026-04-28 12:39",dur:"1 min",type:"Broken Pipe (EPIPE)",detail:"Ping-Monitor: write EPIPE während Ping-Schreiben",sev:"warn"},
+  {t:"2026-04-28 12:54–13:01",dur:"~7 min",type:"TCP Timeout (ETIMEDOUT)",detail:"Ping 2× ETIMEDOUT — shared outage mit berlin.ping",sev:"warn"},
+  {t:"2026-05-14 (ganzer Tag)",dur:"29 down-checks",type:"Browser Timeout",detail:"Erste größere Einbrüche — beginnt zu eskalieren",sev:"warn"},
+  {t:"2026-05-15",dur:"131 down-checks",type:"Browser + TCP",detail:"Eskalation — über 2 Stunden Ausfallzeit kumulativ",sev:"dn"},
+  {t:"2026-05-16 (Worst Day)",dur:"133 down-checks",type:"Browser + TCP",detail:"SCHLECHTESTER TAG — 90.7% Uptime, Samstag",sev:"dn"},
+  {t:"2026-05-17",dur:"95 down-checks",type:"Browser + TCP",detail:"Anhaltend — kein Recovery",sev:"dn"},
+  {t:"2026-05-18 (partiell)",dur:"84 down-checks",type:"Browser + TCP",detail:"Noch immer aktiv bei Report-Stand — ongoing",sev:"dn"},
+];
+
+function buildLog(elId, items){
+  const el=document.getElementById(elId);
+  if(!el)return;
+  items.forEach(({t,dur,type,detail,sev})=>{
+    const row=document.createElement('div');
+    row.className=`irow ${sev==='warn'?'warn':''}`;
+    row.innerHTML=`
+      <div class="itime">${t}</div>
+      <div class="imain">
+        <div class="ititle">${type}</div>
+        <div class="idetail">${detail}</div>
+      </div>
+      <div class="idur ${sev==='warn'?'warn':''}">${dur}</div>`;
+    el.appendChild(row);
+  });
+}
+buildLog('ilog-berlin',BERLIN_INC);
+buildLog('ilog-camelot',CAMELOT_INC);
+
+// ── Tab switch ────────────────────────────────────────────────────────────────
+function sw(s){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelector('.tab.t'+s[0]).classList.add('active');
+  document.getElementById('p-'+s).classList.add('active');
+}
+</script>
+</body>
+</html>

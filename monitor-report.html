@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor Report — Last 30 Days</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #171b26;
+    --border: #252936;
+    --up: #22d3a0;
+    --down: #f04f58;
+    --warn: #f5a623;
+    --neutral: #6b7799;
+    --text: #e2e8f8;
+    --muted: #8892b0;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 40px 24px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+    margin-bottom: 36px;
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--neutral);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .generated {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--neutral);
+    margin-top: 6px;
+  }
+
+  /* Summary row */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 36px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+
+  .stat-card .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .stat-card .value {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .stat-card .sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .color-up { color: var(--up); }
+  .color-down { color: var(--down); }
+  .color-warn { color: var(--warn); }
+  .color-neutral { color: var(--neutral); }
+
+  /* Section */
+  h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--neutral);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  section { margin-bottom: 40px; }
+
+  /* Monitor table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:last-child td { border-bottom: none; }
+
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .monitor-name {
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .monitor-host {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .badge-ping { background: rgba(107,119,153,0.15); color: var(--neutral); }
+  .badge-http { background: rgba(34,211,160,0.1); color: var(--up); }
+  .badge-browser { background: rgba(245,166,35,0.1); color: var(--warn); }
+  .badge-inactive { background: rgba(240,79,88,0.1); color: var(--down); }
+
+  .uptime-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .uptime-bar {
+    flex: 1;
+    height: 5px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .uptime-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+  }
+
+  .uptime-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    min-width: 42px;
+    text-align: right;
+  }
+
+  .ping-val {
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .ping-range {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Incidents */
+  .incident-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .incident-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--down);
+    border-radius: 4px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .incident-item.warn {
+    border-left-color: var(--warn);
+  }
+
+  .incident-monitor {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .incident-detail {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .incident-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    white-space: nowrap;
+    padding: 3px 8px;
+    border-radius: 3px;
+    background: rgba(240,79,88,0.12);
+    color: var(--down);
+  }
+
+  .incident-badge.warn {
+    background: rgba(245,166,35,0.12);
+    color: var(--warn);
+  }
+
+  /* Findings */
+  .findings {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+
+  .finding-icon {
+    font-size: 16px;
+    min-width: 24px;
+    text-align: center;
+    margin-top: 1px;
+  }
+
+  .finding-title {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 3px;
+  }
+
+  .finding-body {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .finding-body code {
+    font-family: var(--mono);
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--neutral);
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Uptime Kuma · Monitoring Report</div>
+  <h1>30-Day Status Report</h1>
+  <div class="subtitle">Monitors: ping &amp; HTTP/browser · Period: May 10 – June 9, 2026</div>
+  <div class="generated">Generated: 2026-06-09 · Source: MariaDB via Metabase MCP</div>
+</header>
+
+<!-- Summary -->
+<section>
+  <h2>Fleet Summary</h2>
+  <div class="summary-grid">
+    <div class="stat-card">
+      <div class="label">Active Monitors</div>
+      <div class="value color-up">4</div>
+      <div class="sub">2 inactive (paused)</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Best Uptime</div>
+      <div class="value color-up">100%</div>
+      <div class="sub">berlin.kultserver.de ping</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Worst Uptime</div>
+      <div class="value color-down">~82%</div>
+      <div class="sub">berlin.kultserver.de browser</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Avg Ping (fleet)</div>
+      <div class="value color-neutral">1.1 ms</div>
+      <div class="sub">ping monitors only</div>
+    </div>
+  </div>
+</section>
+
+<!-- Per-monitor table -->
+<section>
+  <h2>Per-Monitor Breakdown</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Monitor</th>
+        <th>Type</th>
+        <th>Uptime (30d)</th>
+        <th>Avg Ping</th>
+        <th>Min / Max</th>
+        <th>Down events</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- Monitor 1: barrierefrei.berlin PING — inactive -->
+      <tr>
+        <td>
+          <div class="monitor-name" style="color: var(--muted)">barrierefrei.berlin</div>
+          <div class="monitor-host">barrierefrei.berlin</div>
+        </td>
+        <td><span class="badge badge-inactive">Paused</span></td>
+        <td>
+          <div class="uptime-bar-wrap">
+            <div class="uptime-bar"><div class="uptime-fill" style="width:100%; background: var(--neutral)"></div></div>
+            <span class="uptime-label color-neutral">—</span>
+          </div>
+        </td>
+        <td><span class="ping-val color-neutral">—</span></td>
+        <td><span class="ping-range">Monitor inactive</span></td>
+        <td><span class="ping-val color-neutral">—</span></td>
+      </tr>
+
+      <!-- Monitor 8: berlin.kultserver.de PING -->
+      <tr>
+        <td>
+          <div class="monitor-name">berlin.kultserver.de</div>
+          <div class="monitor-host">ping · berlin.kultserver.de</div>
+        </td>
+        <td><span class="badge badge-ping">Ping</span></td>
+        <td>
+          <div class="uptime-bar-wrap">
+            <div class="uptime-bar"><div class="uptime-fill" style="width:99.8%; background: var(--up)"></div></div>
+            <span class="uptime-label color-up">99.8%</span>
+          </div>
+        </td>
+        <td><span class="ping-val color-up">1.2 ms</span></td>
+        <td><span class="ping-range">0.4 ms – 13.7 ms</span></td>
+        <td><span class="ping-val color-up">≤5</span></td>
+      </tr>
+
+      <!-- Monitor 9: camelot.kultserver.de PING -->
+      <tr>
+        <td>
+          <div class="monitor-name">camelot.kultserver.de</div>
+          <div class="monitor-host">ping · camelot.kultserver.de</div>
+        </td>
+        <td><span class="badge badge-ping">Ping</span></td>
+        <td>
+          <div class="uptime-bar-wrap">
+            <div class="uptime-bar"><div class="uptime-fill" style="width:99.5%; background: var(--up)"></div></div>
+            <span class="uptime-label color-up">99.5%</span>
+          </div>
+        </td>
+        <td><span class="ping-val color-up">0.8 ms</span></td>
+        <td><span class="ping-range">0.3 ms – 44.6 ms</span></td>
+        <td><span class="ping-val color-warn">~11</span></td>
+      </tr>
+
+      <!-- Monitor 7: berlin.kultserver.de real-browser -->
+      <tr>
+        <td>
+          <div class="monitor-name">berlin.kultserver.de</div>
+          <div class="monitor-host">real-browser · https://berlin.kultserver.de/</div>
+        </td>
+        <td><span class="badge badge-browser">Browser</span></td>
+        <td>
+          <div class="uptime-bar-wrap">
+            <div class="uptime-bar"><div class="uptime-fill" style="width:82%; background: var(--down)"></div></div>
+            <span class="uptime-label color-down">~82%</span>
+          </div>
+        </td>
+        <td><span class="ping-val color-warn">35 ms</span></td>
+        <td><span class="ping-range">7 ms – 9,369 ms</span></td>
+        <td><span class="ping-val color-down">High — see incidents</span></td>
+      </tr>
+
+      <!-- Monitor 10: HTTPS camelot.kultserver.de real-browser -->
+      <tr>
+        <td>
+          <div class="monitor-name">HTTPS camelot.kultserver.de</div>
+          <div class="monitor-host">real-browser · https://camelot.kultserver.de/login</div>
+        </td>
+        <td><span class="badge badge-browser">Browser</span></td>
+        <td>
+          <div class="uptime-bar-wrap">
+            <div class="uptime-bar"><div class="uptime-fill" style="width:97%; background: var(--warn)"></div></div>
+            <span class="uptime-label color-warn">~97%</span>
+          </div>
+        </td>
+        <td><span class="ping-val color-warn">127 ms</span></td>
+        <td><span class="ping-range">44 ms – 8,817 ms</span></td>
+        <td><span class="ping-val color-warn">Occasional spikes</span></td>
+      </tr>
+
+    </tbody>
+  </table>
+</section>
+
+<!-- Incidents -->
+<section>
+  <h2>Notable Incidents (last 30 days)</h2>
+  <div class="incident-list">
+
+    <div class="incident-item">
+      <div>
+        <div class="incident-monitor">berlin.kultserver.de — browser monitor</div>
+        <div class="incident-detail">Multiple days with significant downtime: May 16 (17 down slots), May 18 (78 down), May 19 (103 down), May 25 (32 down), May 26 (80 down), May 29–Jun 7 recurrent drops</div>
+      </div>
+      <div class="incident-badge">Recurring</div>
+    </div>
+
+    <div class="incident-item">
+      <div>
+        <div class="incident-monitor">camelot.kultserver.de — ping monitor</div>
+        <div class="incident-detail">Jun 6: 29 down events. Jun 7: 131 down events (major outage ~2.2 hrs). Jun 8: 129 down events — ongoing issue as of report date</div>
+      </div>
+      <div class="incident-badge">Ongoing ⚠</div>
+    </div>
+
+    <div class="incident-item warn">
+      <div>
+        <div class="incident-monitor">camelot.kultserver.de — HTTPS browser monitor</div>
+        <div class="incident-detail">Jun 7: 133 down. Jun 8: 95 down. Max response time spikes to 8,817 ms on Jun 8. Correlates with ping outage above.</div>
+      </div>
+      <div class="incident-badge warn">Correlated</div>
+    </div>
+
+    <div class="incident-item warn">
+      <div>
+        <div class="incident-monitor">berlin.kultserver.de — ping monitor</div>
+        <div class="incident-detail">Jun 6: 8 down events. Isolated — no corresponding browser outage. Max ping jumped to 50.4 ms on Jun 7.</div>
+      </div>
+      <div class="incident-badge warn">Transient</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- Key findings -->
+<section>
+  <h2>Key Findings &amp; Recommendations</h2>
+  <div class="findings">
+
+    <div class="finding">
+      <div class="finding-icon">🔴</div>
+      <div>
+        <div class="finding-title">camelot.kultserver.de is in active trouble</div>
+        <div class="finding-body">Both ping and HTTPS monitors show increasing down events over the last 3 days (Jun 6–8). This is not historical — it is ongoing. The correlated failure across both monitor types suggests a network/server issue, not an application bug. Investigate the server or upstream routing immediately.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-icon">🟡</div>
+      <div>
+        <div class="finding-title">berlin.kultserver.de browser monitor has a reliability problem</div>
+        <div class="finding-body">The real-browser monitor shows repeated drops throughout the period (10–18% daily down time on bad days), while the ping monitor for the same host stays nearly perfect. This pattern strongly suggests the application layer is the issue — not infrastructure. Check for <code>503</code> errors, memory leaks, or long-running processes that exhaust the app server.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-icon">🟡</div>
+      <div>
+        <div class="finding-title">Real-browser max pings are extreme (up to 9,369 ms)</div>
+        <div class="finding-body">Average browser response times of 35–127 ms are acceptable, but max spikes reach 9+ seconds for berlin and 8.8 seconds for camelot. These cause timeout failures. Consider tuning the monitor timeout threshold and profiling the app pages for heavy assets or blocking scripts.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-icon">✅</div>
+      <div>
+        <div class="finding-title">Network layer (ping) is healthy overall</div>
+        <div class="finding-body">Both <code>berlin.kultserver.de</code> and <code>camelot.kultserver.de</code> ping monitors show sub-2 ms average latency with near-perfect uptime outside of the Jun 6–8 camelot incident. The underlying server connectivity is solid.</div>
+      </div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-icon">⚪</div>
+      <div>
+        <div class="finding-title">barrierefrei.berlin monitor is paused</div>
+        <div class="finding-body">Monitor ID 1 (<code>barrierefrei.berlin</code>, ping type) has been inactive since before the report window. Confirm whether this is intentional or a forgotten monitor that should be re-enabled or deleted.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <span>uptime-kuma · mariadb · metabase mcp</span>
+  <span>Report window: 2026-05-10 → 2026-06-09</span>
+</footer>
+
+</body>
+</html>
